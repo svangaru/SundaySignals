@@ -1,17 +1,19 @@
-# Common junk
-.git/
-.vscode/
-node_modules/
-.next/
-.vercel/
-**/__pycache__/
-**/*.pyc
-ml/.venv/
+# Ignore everything by default
+**
 
-# Ignore ALL stages by default...
-ml/stages/**
-
-# ...but explicitly include just the pieces we need now
+# Allow exactly what Modal needs for ingest_once
+!ml/
+!ml/__init__.py
+!ml/requirements.txt
+!ml/modal_app.py
 !ml/stages/
 !ml/stages/__init__.py
 !ml/stages/ingest_once.py
+
+# Still ignore common junk inside ml/
+ml/.venv/
+**/__pycache__/
+**/*.pyc
+
+# (Optional) If you keep other ML code in a disabled folder, ensure it's ignored
+ml/stages_disabled/**
