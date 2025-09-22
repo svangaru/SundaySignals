@@ -17,3 +17,4 @@ ml/.venv/
 
 # (Optional) If you keep other ML code in a disabled folder, ensure it's ignored
 ml/stages_disabled/**
+ml/stages_disabled/
