@@ -1,17 +1,23 @@
+# ml/modal_app.py
+import modal as _modal
 
-import modal
+# Support both APIs: App (new) and Stub (old)
+App = getattr(_modal, "App", None)
+if App is None:
+    from modal import Stub as App  # older modal
+    Image = _modal.Image
+else:
+    from modal import Image
 
-app = modal.App("fantasy_ml")
+app = App("fantasy_ml")
 
 image = (
-    modal.Image.debian_slim()
+    Image.debian_slim()
     .pip_install_from_requirements("ml/requirements.txt")
 )
 
 @app.function(image=image, timeout=600)
 def ingest_once(season_start: int = 2023, season_end: int = 2024):
-    """Download or assemble a tiny 2–3 season sample and write parquet to Storage.
-    Upsert basic dims into Postgres (players, schedule, defense_vs_pos, odds)."""
     print("Ingest sample stub", season_start, season_end)
 
 @app.function(image=image, timeout=600)
