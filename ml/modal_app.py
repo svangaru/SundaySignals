@@ -8,15 +8,15 @@ image = (
     .pip_install_from_requirements("ml/requirements.txt")
 )
 
-# ── Helper: ensure you created a Modal secret named "supabase"
-#     that includes SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
-
 @app.function(image=image, timeout=600, secrets=[Secret.from_name("supabase")])
 def ingest_once(season_start: int = 2023, season_end: int = 2024):
     import os
     print("SUPABASE_URL (from Modal env):", repr(os.environ.get("SUPABASE_URL")))
     from ml.stages import ingest_once as ingest_mod
-    return ingest_mod.run(season=2025, week=3)
+    res = ingest_mod.run(season=2025, week=3)
+    print("[ingest] result:", res)
+    return res
+
 
 
 @app.function(image=image, timeout=600, secrets=[Secret.from_name("supabase")])

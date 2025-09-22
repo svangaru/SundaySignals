@@ -1,90 +1,71 @@
 # ml/stages/ingest_once.py
 import os
 from typing import List, Dict
-from supabase import create_client, Client
 
-
-def _chunked(rows: List[Dict], n: int = 500):
-    """Yield successive n-sized chunks from a list."""
-    for i in range(0, len(rows), n):
-        yield rows[i:i + n]
-
-
-def upsert_table(sb: Client, table: str, rows: List[Dict]):
-    """Helper to upsert rows into a Supabase table in batches."""
-    if not rows:
-        return
-    for chunk in _chunked(rows, 500):
-        sb.table(table).upsert(chunk).execute()
-
-
-def run(season: int = 2025, week: int = 3):
-    """
-    Minimal ingestion job:
-    - Reads Supabase credentials from environment
-    - Upserts example rows into core tables
-    """
-    # ✅ Read env vars *inside* the function (Modal injects secrets here)
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+def _env():
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
-        raise RuntimeError(
-            "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment. "
-            "Did you create the Modal secret 'supabase' and attach it to this function?"
-        )
+        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in env.")
+    return url, key
 
-    sb: Client = create_client(url, key)
+def _upsert_table(sb, table: str, rows: List[Dict]):
+    if not rows:
+        print(f"[upsert:{table}] nothing to upsert")
+        return
+    print(f"[upsert:{table}] inserting {len(rows)} rows…")
+    # Small chunks to be safe
+    for i in range(0, len(rows), 500):
+        chunk = rows[i:i+500]
+        sb.table(table).upsert(chunk).execute()
+    # Confirm count via a cheap select (don’t do this in prod for big tables)
+    try:
+        resp = sb.table(table).select("*", count="exact").limit(1).execute()
+        total = getattr(resp, "count", None)
+        print(f"[upsert:{table}] ok. approx total rows now: {total}")
+    except Exception as e:
+        print(f"[upsert:{table}] select count failed: {e}")
 
-    # Example data (stub)
+def run(season: int, week: int):
+    from supabase import create_client
+
+    url, key = _env()
+    print("[ingest] connecting to:", url)
+    sb = create_client(url, key)
+
+    # --- Minimal sample rows to prove the path ---
     players = [
-        {"player_id": "123", "position": "RB", "team": "NYJ", "name": "Example RB"},
-        {"player_id": "456", "position": "WR", "team": "BUF", "name": "Example WR"},
+        {"player_id": "p123", "position": "RB", "team": "NYJ", "name": "Example RB"},
+        {"player_id": "p456", "position": "WR", "team": "BUF", "name": "Example WR"},
     ]
-
     schedule = [
         {"season": season, "week": week, "team": "NYJ", "opp": "BUF", "home": True},
         {"season": season, "week": week, "team": "BUF", "opp": "NYJ", "home": False},
     ]
-
     dvp = [
         {"season": season, "week": week, "team": "BUF", "position": "RB", "dvp": 3.2},
         {"season": season, "week": week, "team": "NYJ", "position": "WR", "dvp": 6.7},
     ]
-
     odds = [
-        {
-            "season": season,
-            "week": week,
-            "game_id": "nyj-buf-w3",
-            "team": "NYJ",
-            "opp": "BUF",
-            "spread": -2.5,
-            "moneyline": -135,
-            "total": 42.5,
-        },
-        {
-            "season": season,
-            "week": week,
-            "game_id": "nyj-buf-w3",
-            "team": "BUF",
-            "opp": "NYJ",
-            "spread": 2.5,
-            "moneyline": 115,
-            "total": 42.5,
-        },
+        {"season": season, "week": week, "game_id": f"nyj-buf-w{week}", "team": "NYJ", "opp": "BUF",
+         "spread": -2.5, "moneyline": -135, "total": 42.5},
+        {"season": season, "week": week, "game_id": f"nyj-buf-w{week}", "team": "BUF", "opp": "NYJ",
+         "spread": 2.5, "moneyline": 115, "total": 42.5},
     ]
 
-    # Upsert to Supabase
-    upsert_table(sb, "players", players)
-    upsert_table(sb, "schedule", schedule)
-    upsert_table(sb, "defense_vs_pos", dvp)
-    upsert_table(sb, "odds", odds)
+    # Upserts + per-table logging
+    _upsert_table(sb, "players", players)
+    _upsert_table(sb, "schedule", schedule)
+    _upsert_table(sb, "defense_vs_pos", dvp)
+    _upsert_table(sb, "odds", odds)
 
-    return {
-        "inserted": {
-            "players": len(players),
-            "schedule": len(schedule),
-            "defense_vs_pos": len(dvp),
-            "odds": len(odds),
-        }
-    }
+    # Final sanity readbacks
+    try:
+        s = sb.table("schedule").select("*").eq("season", season).eq("week", week).limit(5).execute()
+        print(f"[check:schedule] rows for season={season}, week={week}: {len(s.data)}")
+    except Exception as e:
+        print("[check:schedule] failed:", e)
+
+    return {"ok": True, "season": season, "week": week,
+            "inserted": {"players": len(players), "schedule": len(schedule),
+                         "defense_vs_pos": len(dvp), "odds": len(odds)}}
