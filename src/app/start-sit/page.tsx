@@ -1,0 +1,1 @@
+export default function StartSit(){return(<section><h2>Start / Sit</h2><div>Coming soon…</div></section>);}

@@ -1,0 +1,1 @@
+export default function Odds(){return(<section><h2>Odds</h2><div>Coming soon…</div></section>);}

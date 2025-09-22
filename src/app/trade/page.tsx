@@ -1,0 +1,1 @@
+export default function Trade(){return(<section><h2>Trade Analyzer</h2><div>Coming soon…</div></section>);}
