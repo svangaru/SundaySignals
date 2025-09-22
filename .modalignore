@@ -9,7 +9,9 @@ node_modules/
 ml/.venv/
 
 # Ignore ALL stages by default...
-ml/stages/*
+ml/stages/**
 
-# ...but explicitly include ingest_once (the only one we need for now)
+# ...but explicitly include just the pieces we need now
+!ml/stages/
+!ml/stages/__init__.py
 !ml/stages/ingest_once.py
