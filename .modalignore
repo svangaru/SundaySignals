@@ -1,4 +1,4 @@
-# --- Common junk you never want in Modal builds ---
+# Ignore junk
 .git/
 .vscode/
 node_modules/
@@ -8,17 +8,17 @@ node_modules/
 **/*.pyc
 ml/.venv/
 
-# --- Whitelist the minimal ML pipeline ---
+# Explicitly include ML essentials
 !ml/requirements.txt
 !ml/modal_app.py
 !ml/stages/
 !ml/stages/__init__.py
-
-# active stages
 !ml/stages/ingest_once.py
 !ml/stages/build_features.py
 !ml/stages/train_cvplus.py
 !ml/stages/infer_batch.py
+!ml/stages/validate_promote.py
+!ml/stages/backtest_rolling.py
 
-# --- Everything else stays out ---
+# Exclude disabled folder if it exists
 ml/stages_disabled/**
