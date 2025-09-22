@@ -1,13 +1,9 @@
 # ml/modal_app.py
-import modal as _modal
+from modal import App, Image, Secret, Mount
 
-# Support both APIs: App (new) and Stub (old)
-App = getattr(_modal, "App", None)
-if App is None:
-    from modal import Stub as App  # older modal
-    Image = _modal.Image
-else:
-    from modal import Image
+# Mount the whole repo (or at least the ml/ dir) into the container so imports work
+# Option A: mount the repo root (cleanest if you import as "ml.stages...")
+MOUNTS = [Mount.from_local_dir(".", remote_path="/root")]
 
 app = App("fantasy_ml")
 
@@ -16,26 +12,46 @@ image = (
     .pip_install_from_requirements("ml/requirements.txt")
 )
 
-@app.function(image=image, timeout=600)
+# Import using the package path now that /root contains ml/
+from ml.stages import ingest_once as ingest_mod
+
+@app.function(image=image, timeout=600,
+              secrets=[Secret.from_name("supabase")],
+              mounts=MOUNTS)
 def ingest_once(season_start: int = 2023, season_end: int = 2024):
-    print("Ingest sample stub", season_start, season_end)
+    import os
+    print("ENV has SUPABASE_URL?", "SUPABASE_URL" in os.environ)
+    out = ingest_mod.run(season=2025, week=3)
+    print("Upsert result:", out)
 
-@app.function(image=image, timeout=600)
+
+# Repeat mounts+secrets on other functions
+@app.function(image=image, timeout=600,
+              secrets=[Secret.from_name("supabase")],
+              mounts=MOUNTS)
 def build_features(season: int, week: int):
-    print("Build features", season, week)
+    print(f"[stub] Build features for season={season}, week={week}")
 
-@app.function(image=image, timeout=1200)
+@app.function(image=image, timeout=1200,
+              secrets=[Secret.from_name("supabase")],
+              mounts=MOUNTS)
 def train_cvplus(season: int, week: int, learner: str = "xgb"):
-    print("Train CV+", season, week, learner)
+    print(f"[stub] Train CV+ for season={season}, week={week}, learner={learner}")
 
-@app.function(image=image, timeout=600)
+@app.function(image=image, timeout=600,
+              secrets=[Secret.from_name("supabase")],
+              mounts=MOUNTS)
 def infer_batch(season: int, week: int):
-    print("Infer batch", season, week)
+    print(f"[stub] Inference batch for season={season}, week={week}")
 
-@app.function(image=image, timeout=600)
+@app.function(image=image, timeout=600,
+              secrets=[Secret.from_name("supabase")],
+              mounts=MOUNTS)
 def validate_promote(season: int, week: int):
-    print("Validate & promote", season, week)
+    print(f"[stub] Validate & promote model for season={season}, week={week}")
 
-@app.function(image=image, timeout=1800)
+@app.function(image=image, timeout=1800,
+              secrets=[Secret.from_name("supabase")],
+              mounts=MOUNTS)
 def backtest_rolling(start_season: int = 2015, end_season: int = 2024):
-    print("Backtest rolling", start_season, end_season)
+    print(f"[stub] Backtest rolling from {start_season} to {end_season}")
