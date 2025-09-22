@@ -1,0 +1,12 @@
+# Common junk
+.git/
+.vscode/
+node_modules/
+.next/
+.vercel/
+**/__pycache__/
+**/*.pyc
+ml/.venv/
+
+# Exclude the file that keeps changing during snapshot
+ml/stages/infer_batch.py
