@@ -7,9 +7,7 @@ dist
 # Env files
 .env
 .env.local
-.env.development
-.env.production
-.env.test
+.env.example
 
 # OS junk
 .DS_Store

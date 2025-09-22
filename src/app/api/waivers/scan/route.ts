@@ -1,5 +1,5 @@
 
-import { requireTriggerToken } from '@/src/lib/utils';
+import { requireTriggerToken } from '@/lib/utils';
 
 export async function POST(req: Request) {
   const unauthorized = requireTriggerToken(req.headers);
