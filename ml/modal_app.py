@@ -13,12 +13,9 @@ image = (
 
 @app.function(image=image, timeout=600, secrets=[Secret.from_name("supabase")])
 def ingest_once(season_start: int = 2023, season_end: int = 2024):
-    # Import here (NOT top-level) so modal's snapshot/imports work cleanly
-    from ml.stages import ingest_once as ingest_mod
     import os
-
-    print("Modal sees SUPABASE_URL:", "SUPABASE_URL" in os.environ)
-    # Adjust your function name as you implement it; this is just a call-through
+    print("SUPABASE_URL (from Modal env):", repr(os.environ.get("SUPABASE_URL")))
+    from ml.stages import ingest_once as ingest_mod
     return ingest_mod.run(season=2025, week=3)
 
 
