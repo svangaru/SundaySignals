@@ -1,20 +1,24 @@
-# Ignore everything by default
-**
+# --- Common junk you never want in Modal builds ---
+.git/
+.vscode/
+node_modules/
+.next/
+.vercel/
+**/__pycache__/
+**/*.pyc
+ml/.venv/
 
-# Allow exactly what Modal needs for ingest_once
-!ml/
-!ml/__init__.py
+# --- Whitelist the minimal ML pipeline ---
 !ml/requirements.txt
 !ml/modal_app.py
 !ml/stages/
 !ml/stages/__init__.py
+
+# active stages
 !ml/stages/ingest_once.py
+!ml/stages/build_features.py
+!ml/stages/train_cvplus.py
+!ml/stages/infer_batch.py
 
-# Still ignore common junk inside ml/
-ml/.venv/
-**/__pycache__/
-**/*.pyc
-
-# (Optional) If you keep other ML code in a disabled folder, ensure it's ignored
+# --- Everything else stays out ---
 ml/stages_disabled/**
-ml/stages_disabled/
