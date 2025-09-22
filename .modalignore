@@ -8,5 +8,8 @@ node_modules/
 **/*.pyc
 ml/.venv/
 
-# Exclude the file that keeps changing during snapshot
-ml/stages/infer_batch.py
+# Ignore ALL stages by default...
+ml/stages/*
+
+# ...but explicitly include ingest_once (the only one we need for now)
+!ml/stages/ingest_once.py
