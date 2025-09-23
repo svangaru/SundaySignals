@@ -7,6 +7,18 @@ image = (
     .pip_install_from_requirements("ml/requirements.txt")
 )
 
+@app.function(image=image, secrets=[Secret.from_name("supabase")])
+def debug_env():
+    import os
+    print("SUPABASE_URL =", os.environ.get("SUPABASE_URL"))
+    print("Has SERVICE_ROLE_KEY =", bool(os.environ.get("SUPABASE_SERVICE_ROLE_KEY")))
+
+@app.function(image=image, timeout=7200, secrets=[Secret.from_name("supabase")])
+def backfill_history(start_season: int = 2015, end_season: int = 2024):
+    from ml.stages import backfill_history as mod
+    return mod.run(start_season, end_season)
+
+
 @app.function(image=image, timeout=600, secrets=[Secret.from_name("supabase")])
 def ingest_once(season_start: int = 2023, season_end: int = 2024):
     from ml.stages import ingest_once as mod

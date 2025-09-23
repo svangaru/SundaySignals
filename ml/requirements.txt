@@ -7,3 +7,4 @@ lightgbm
 pyyaml
 joblib
 supabase
+nfl-data-py
