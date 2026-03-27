@@ -38,9 +38,14 @@ Everything runs on free tiers. Estimated monthly compute: ~50–100 GitHub Actio
 nfl-breakout-predictor/
 │
 ├── pipelines/
+│   ├── features.py              # public API — re-exports build_seasonal_features, build_weekly_features
+│   ├── seasonal.py              # build_seasonal_features + all seasonal helpers
+│   ├── weekly.py                # build_weekly_features + all weekly helpers
+│   ├── loaders.py               # nfl_data_py wrappers with normalised column names
+│   ├── constants.py             # POSITIONS, breakout thresholds, DB column lists
+│   ├── utils.py                 # shared math utilities (three_point_slope, etc.)
 │   ├── ingest_seasonal.py       # pulls nfl_data_py + PFR, upserts player_seasons
 │   ├── ingest_weekly.py         # pulls weekly game data, upserts player_weeks
-│   ├── features.py              # all feature engineering — imported by ingest + train
 │   ├── train_seasonal.py        # XGBoost seasonal model, SHAP, kNN comps
 │   ├── train_weekly.py          # XGBoost weekly model, updates predictions
 │   ├── backtest.py              # walk-forward validation, writes model_performance
@@ -194,7 +199,7 @@ npm run dev
 If you're building this from scratch, the recommended sequence is:
 
 1. Run Supabase DDL — create tables and indexes
-2. `features.py` — nail down the feature logic before anything else depends on it
+2. `constants.py`, `loaders.py`, `utils.py`, `seasonal.py`, `weekly.py` — feature engineering module (imported via `features.py`)
 3. `ingest_seasonal.py` — populate `player_seasons` with historical data
 4. `ingest_weekly.py` — populate `player_weeks`
 5. `backtest.py` — validate the feature set produces signal before training
