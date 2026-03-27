@@ -4,6 +4,8 @@ Shared utility functions used across pipeline modules.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pandas as pd
 
@@ -38,3 +40,25 @@ def three_point_slope(
     slope[old_mid] =  y_mid[old_mid] - y_old[old_mid]
 
     return slope
+
+
+def df_to_records(df: pd.DataFrame) -> list[dict]:
+    """
+    Convert a DataFrame to a JSON-safe list of dicts for Supabase upserts.
+    Handles NaN, pd.NA, numpy scalar types, and pandas nullable booleans.
+    """
+    records = []
+    for row in df.to_dict(orient="records"):
+        clean = {}
+        for k, v in row.items():
+            if v is pd.NA or (isinstance(v, float) and math.isnan(v)):
+                clean[k] = None
+            elif isinstance(v, bool):
+                clean[k] = bool(v)
+            elif hasattr(v, "item"):
+                # numpy scalar → Python native
+                clean[k] = v.item()
+            else:
+                clean[k] = v
+        records.append(clean)
+    return records
