@@ -1,1 +1,3 @@
 nfl-data-py
+supabase
+python-dotenv
