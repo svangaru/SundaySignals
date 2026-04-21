@@ -1,0 +1,49 @@
+name: Ingest Weekly
+
+on:
+  schedule:
+    # Every Tuesday at 6am UTC during NFL season (Sep–Jan)
+    # GitHub Actions runs year-round; the script self-exits outside the season
+    # because nfl_data_py returns no completed weeks.
+    - cron: "0 6 * 9-12,1 2"
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "NFL season year (e.g. 2024). Leave blank for auto-detect."
+        required: false
+        default: ""
+      week:
+        description: "Specific week number to ingest. Leave blank for all completed weeks."
+        required: false
+        default: ""
+
+jobs:
+  ingest:
+    name: Build weekly features and upsert to Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run ingest_weekly
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.season }}" ]; then
+            ARGS="$ARGS --season ${{ github.event.inputs.season }}"
+          fi
+          if [ -n "${{ github.event.inputs.week }}" ]; then
+            ARGS="$ARGS --week ${{ github.event.inputs.week }}"
+          fi
+          python pipelines/ingest_weekly.py $ARGS

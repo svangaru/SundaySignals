@@ -2,3 +2,9 @@
 .python-version
 CLAUDE.md
 .env
+.claude
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
