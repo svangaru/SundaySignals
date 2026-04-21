@@ -1,0 +1,50 @@
+name: Retrain Seasonal
+
+on:
+  workflow_dispatch:
+    inputs:
+      train_seasons:
+        description: "Space-separated train seasons (e.g. 2020 2021 2022 2023). Leave blank for default."
+        required: false
+        default: ""
+      predict_season:
+        description: "Season to generate predictions for (e.g. 2024). Leave blank for default."
+        required: false
+        default: ""
+
+jobs:
+  retrain:
+    name: Train seasonal XGBoost model and write predictions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Train seasonal model
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.train_seasons }}" ]; then
+            ARGS="$ARGS --train-seasons ${{ github.event.inputs.train_seasons }}"
+          fi
+          if [ -n "${{ github.event.inputs.predict_season }}" ]; then
+            ARGS="$ARGS --predict-season ${{ github.event.inputs.predict_season }}"
+          fi
+          python pipelines/train_seasonal.py $ARGS
+
+      - name: Run walk-forward backtest (seasonal)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python pipelines/backtest.py --model-type seasonal
