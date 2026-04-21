@@ -117,10 +117,13 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
       .eq('season', season),
   ])
 
-  const preds: Prediction[]       = predsRes.data ?? []
-  const seasonRows: PlayerSeason[] = seasonsRes.data ?? []
+  type PredRow    = Pick<Prediction,   'player_id' | 'season' | 'model_type' | 'breakout_prob' | 'risk_tier' | 'updated_at'>
+  type SeasonMeta = Pick<PlayerSeason, 'player_id' | 'season' | 'player_name' | 'position' | 'team'>
 
-  const metaById: Record<string, PlayerSeason> = {}
+  const preds: PredRow[]       = predsRes.data ?? []
+  const seasonRows: SeasonMeta[] = seasonsRes.data ?? []
+
+  const metaById: Record<string, SeasonMeta> = {}
   for (const row of seasonRows) {
     metaById[row.player_id] = row
   }
