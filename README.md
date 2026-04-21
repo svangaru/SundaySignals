@@ -48,6 +48,7 @@ SundaySignals/
 │   └── modal_inference.py   # Modal app for live inference
 │
 ├── frontend/                # Next.js app (deployed on Vercel)
+│   ├── vercel.json          # forces Next.js framework detection
 │   ├── lib/
 │   │   ├── supabase.ts      # Supabase JS client (anon key)
 │   │   └── types.ts         # TypeScript interfaces + ML constants
@@ -94,34 +95,39 @@ SundaySignals/
 ### 1. Supabase
 
 1. Create a project at [supabase.com](https://supabase.com)
-2. Open the SQL Editor and run `supabase/schema.sql` — creates all 4 tables, RLS policies, and indexes
-3. Go to **Storage → New bucket** → name it `models`, set to private
-4. Copy your **Project URL**, **service role key**, and **anon key**
+2. Open the **SQL Editor** and run `supabase/schema.sql` — creates all 4 tables, RLS policies, and indexes
+3. Go to **Storage → New bucket** → name it `models`, set to **private**
+4. Copy your **Project URL**, **service role key**, and **anon key** from Settings → API
 
-### 2. Environment variables
+### 2. Python environment
 
 ```bash
+pip install -r requirements.txt
 cp .env.example .env
 # fill in SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY
 ```
 
-For the frontend:
+### 3. Seed the database
+
+Run these in order on first setup:
+
 ```bash
-cp frontend/.env.local.example frontend/.env.local
-# fill in NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
-# fill in MODAL_INFERENCE_URL after deploying Modal (step 4)
+# Pull 2020–2024 historical data (~5 min, ~1GB PBP download on first run)
+python pipelines/ingest_seasonal.py
+
+# Train the pre-season model, compute SHAP + kNN comps, write predictions
+python pipelines/train_seasonal.py
+
+# Run walk-forward backtest, write model_performance rows
+python pipelines/backtest.py --model-type seasonal
 ```
 
-### 3. Python dependencies
+After this the frontend will show real player predictions.
+
+### 4. Modal inference (for live weight sliders)
 
 ```bash
-pip install -r requirements.txt
-```
-
-### 4. Modal inference
-
-```bash
-# Set up Modal credentials (one time)
+# Authenticate with Modal (one time)
 modal setup
 
 # Create the Supabase secret in Modal
@@ -129,31 +135,42 @@ modal secret create supabase-secrets \
   SUPABASE_URL=<your_url> \
   SUPABASE_SERVICE_KEY=<your_service_key>
 
-# Deploy the inference endpoint
+# Deploy the inference endpoint — copy the printed URL
 modal deploy pipelines/modal_inference.py
-# Copy the printed URL → MODAL_INFERENCE_URL in frontend/.env.local
 ```
 
-### 5. Seed the database
+Add the printed URL as `MODAL_INFERENCE_URL` in Vercel environment variables.
 
-```bash
-# Pull 2020–2024 historical data and build features
-python pipelines/ingest_seasonal.py
-
-# Train the seasonal model and write predictions
-python pipelines/train_seasonal.py
-
-# Run walk-forward backtest
-python pipelines/backtest.py --model-type seasonal
-```
-
-### 6. Frontend
+### 5. Frontend (local dev)
 
 ```bash
 cd frontend
 npm install
+cp .env.local.example .env.local
+# fill in NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, MODAL_INFERENCE_URL
 npm run dev   # http://localhost:3000
 ```
+
+### 6. Vercel deployment
+
+1. Import the repo at [vercel.com](https://vercel.com)
+2. Set **Root Directory** to `frontend` in project Settings → General
+3. Add environment variables in Settings → Environment Variables:
+
+| Variable | Value | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` | Safe to expose — public project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key from Supabase | Safe to expose — read-only via RLS |
+| `MODAL_INFERENCE_URL` | printed by `modal deploy` | Server-side only, do not prefix with `NEXT_PUBLIC_` |
+
+### 7. GitHub Actions secrets
+
+Add in repo Settings → Secrets → Actions:
+
+| Secret | Used by |
+|---|---|
+| `SUPABASE_URL` | All 4 workflows |
+| `SUPABASE_SERVICE_KEY` | All 4 workflows |
 
 ---
 
@@ -161,7 +178,7 @@ npm run dev   # http://localhost:3000
 
 ### Seasonal ingest (runs twice: March + August)
 
-Pulls 2020–present historical data via `nfl_data_py`. Computes all pre-season features and upserts to `player_seasons`. The August run ensures OC/QB/roster changes from free agency and the draft are captured before model training.
+Pulls 2020–present historical data via `nfl_data_py`. Computes all pre-season features and upserts to `player_seasons`. The August run captures OC/QB/roster changes before model training.
 
 ```bash
 python pipelines/ingest_seasonal.py
@@ -222,7 +239,7 @@ python pipelines/backtest.py --model-type both
 
 ## Real-time inference
 
-When a user adjusts feature weights in the UI, a Vercel API route calls the Modal endpoint that loads the serialized model from Supabase Storage and runs `predict_proba`. Latency ~100ms on CPU.
+When a user adjusts feature weights in the UI, `pages/api/score.ts` (Vercel) proxies the request to the Modal endpoint, which loads the serialized model from Supabase Storage and runs `predict_proba`. Latency ~100ms on CPU.
 
 ---
 
@@ -233,9 +250,9 @@ When a user adjusts feature weights in the UI, a Vercel API route calls the Moda
 | `player_seasons` | One row per player per season. Pre-season features + ground truth labels. |
 | `player_weeks` | One row per player per week. In-season features + rolling averages. |
 | `predictions` | One row per player per prediction type. Scores, SHAP values, comps as JSONB. |
-| `model_performance` | Backtest results per split per model. Used for calibration chart in UI. |
+| `model_performance` | Backtest results per split per model. Used for accuracy page charts. |
 
-Row Level Security is enabled on all tables. The frontend uses the anon key (read-only). Ingest and training jobs use the service role key via GitHub Actions secrets.
+RLS is enabled on all tables. The frontend uses the anon key (read-only). Pipelines use the service role key.
 
 ---
 
@@ -248,8 +265,6 @@ Row Level Security is enabled on all tables. The frontend uses the anon key (rea
 | `retrain_seasonal.yml` | Manual dispatch | Trains seasonal model, runs backtest |
 | `retrain_weekly.yml` | On `ingest_weekly` success | Trains weekly model, updates predictions |
 
-Add `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` as repository secrets.
-
 ---
 
 ## Tests
@@ -259,7 +274,7 @@ pip install pytest
 pytest tests/ -v
 ```
 
-Tests mock all `nfl_data_py` loaders — no network or database calls required.
+All tests mock `nfl_data_py` loaders — no network or database calls required.
 
 ---
 
