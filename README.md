@@ -295,6 +295,50 @@ All tests mock `nfl_data_py` loaders — no network or database calls required.
 - Requires **Python 3.11+** and **pandas 2.0+**
 - `nfl_data_py >= 0.3.1` required for pandas 2.x compatibility
 - Run all pipeline scripts from the repo root with `PYTHONPATH=.`
+- **macOS**: `brew install libomp` required for XGBoost to load
+
+---
+
+## Current status (April 2026)
+
+### Done
+| Step | Command | Result |
+|---|---|---|
+| Seasonal ingest | `ingest_seasonal.py --seasons 2020–2024` | 3,103 rows in `player_seasons` |
+| Seasonal training | `train_seasonal.py` | 101 predictions for 2024, model in Storage |
+| Backtest | `backtest.py --model-type seasonal` | 3 rows in `model_performance` (AUC 0.67–0.87) |
+
+### Still to do
+
+**1. Fix the frontend (player explorer shows blank)**
+Two bugs in `frontend/pages/index.tsx`:
+- Queries `.eq('model_type', ...)` but the DB column is `prediction_type`
+- Filters on `risk_tier` which is always null in DB; must derive tier from `breakout_prob`
+  (≥0.65 → high, ≥0.40 → medium, else low)
+
+Also: `player_name` is null for all `player_seasons` rows — names need to be backfilled
+from `import_weekly_data()` during ingest and re-run.
+
+**2. Deploy Modal inference (for weight sliders on player detail page)**
+```bash
+modal setup
+modal secret create supabase-secrets SUPABASE_URL=<url> SUPABASE_SERVICE_KEY=<key>
+modal deploy pipelines/modal_inference.py
+# add printed URL as MODAL_INFERENCE_URL in Vercel Settings → Environment Variables
+```
+
+**3. Weekly pipeline** — runs automatically via GitHub Actions (Tuesdays Sep–Jan).
+No action needed until NFL season starts.
+
+### Known DB schema differences
+The Supabase DB was created from an earlier schema than `supabase/schema.sql`.
+Key differences that have been accounted for in pipeline code:
+- `predictions` table uses `prediction_type` column (not `model_type`)
+- `risk_tier` and `direction` columns have check constraints that block all non-null values
+- `model_performance` uses `train_seasons` (text), `calibration_err`, `run_at`
+- `player_seasons` has `draft_number`, `receiving_yards`, `rushing_yards` as `smallint`
+
+See `CLAUDE.md` → "Actual Supabase DB Schema" for full details.
 
 ---
 

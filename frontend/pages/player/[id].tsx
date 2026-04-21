@@ -212,7 +212,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
       .select('*')
       .eq('player_id', playerId)
       .eq('season', season)
-      .eq('model_type', 'seasonal')
+      .eq('prediction_type', 'seasonal')
       .single(),
     supabase
       .from('player_weeks')

@@ -107,9 +107,9 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
   const [predsRes, seasonsRes] = await Promise.all([
     supabase
       .from('predictions')
-      .select('player_id, season, model_type, breakout_prob, risk_tier, updated_at')
+      .select('player_id, season, prediction_type, breakout_prob, updated_at')
       .eq('season', season)
-      .eq('model_type', modelType)
+      .eq('prediction_type', modelType)
       .order('breakout_prob', { ascending: false }),
     supabase
       .from('player_seasons')
@@ -117,10 +117,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
       .eq('season', season),
   ])
 
-  type PredRow    = Pick<Prediction,   'player_id' | 'season' | 'model_type' | 'breakout_prob' | 'risk_tier' | 'updated_at'>
+  type PredRow    = Pick<Prediction,   'player_id' | 'season' | 'prediction_type' | 'breakout_prob' | 'updated_at'>
   type SeasonMeta = Pick<PlayerSeason, 'player_id' | 'season' | 'player_name' | 'position' | 'team'>
 
-  const preds: PredRow[]       = predsRes.data ?? []
+  const preds: PredRow[]         = predsRes.data ?? []
   const seasonRows: SeasonMeta[] = seasonsRes.data ?? []
 
   const metaById: Record<string, SeasonMeta> = {}
@@ -128,18 +128,23 @@ export const getServerSideProps: GetServerSideProps<Props> = async (ctx) => {
     metaById[row.player_id] = row
   }
 
+  // risk_tier is always NULL in the DB (broken check constraint) — derive from prob.
+  const deriveTier = (prob: number): string =>
+    prob >= 0.65 ? 'high' : prob >= 0.40 ? 'medium' : 'low'
+
   const players: PlayerRow[] = preds
     .filter((p) => p.breakout_prob != null)
     .map((p) => {
       const meta = metaById[p.player_id]
+      const prob = p.breakout_prob!
       return {
         player_id:    p.player_id,
         season:       p.season,
         player_name:  meta?.player_name  ?? p.player_id,
         position:     meta?.position     ?? '—',
         team:         meta?.team         ?? '—',
-        breakout_prob: p.breakout_prob!,
-        risk_tier:    p.risk_tier        ?? 'low',
+        breakout_prob: prob,
+        risk_tier:    deriveTier(prob),
         updated_at:   p.updated_at,
       }
     })

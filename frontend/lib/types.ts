@@ -71,23 +71,27 @@ export interface Comp {
 export interface Prediction {
   player_id: string
   season: number
-  model_type: string
+  prediction_type: string  // DB column is "prediction_type", not "model_type"
+  week: number | null
+  buy_sell_score: number | null
   breakout_prob: number | null
-  risk_tier: string | null
+  risk_tier: string | null  // always NULL in DB — derive from breakout_prob in UI
+  direction: string | null  // always NULL in DB
   shap_values: Record<string, number> | null
   comps: Comp[] | null
   updated_at: string
 }
 
 export interface ModelPerformance {
+  id: number
   model_type: string
-  train_max_season: number
+  train_seasons: string    // e.g. "2020-2021" (was train_max_season: number)
   test_season: number
   auc_roc: number | null
   precision_at_20: number | null
-  calibration_error: number | null
+  calibration_err: number | null  // note: not "calibration_error"
   comp_accuracy: number | null
-  created_at: string
+  run_at: string           // note: not "created_at"
 }
 
 // ---------------------------------------------------------------------------

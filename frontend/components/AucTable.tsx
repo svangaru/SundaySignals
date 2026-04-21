@@ -31,15 +31,15 @@ export default function AucTable({ rows }: Props) {
         </thead>
         <tbody className="divide-y divide-gray-50">
           {rows.map((r) => (
-            <tr key={`${r.model_type}-${r.test_season}`} className="hover:bg-gray-50">
+            <tr key={`${r.id}-${r.test_season}`} className="hover:bg-gray-50">
               <td className="px-4 py-3 text-gray-700">
-                Train ≤{r.train_max_season} → Test {r.test_season}
+                Train {r.train_seasons} → Test {r.test_season}
               </td>
               <td className={`px-4 py-3 font-mono ${aucColor(r.auc_roc)}`}>
                 {fmt(r.auc_roc)}
               </td>
               <td className="px-4 py-3 font-mono text-gray-700">{fmt(r.precision_at_20)}</td>
-              <td className="px-4 py-3 font-mono text-gray-700">{fmt(r.calibration_error)}</td>
+              <td className="px-4 py-3 font-mono text-gray-700">{fmt(r.calibration_err)}</td>
               <td className="px-4 py-3 font-mono text-gray-700">{fmt(r.comp_accuracy)}</td>
             </tr>
           ))}
