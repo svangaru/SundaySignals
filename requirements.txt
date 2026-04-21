@@ -1,3 +1,17 @@
+# Core data
 nfl-data-py
+pandas
+numpy
+
+# ML
+xgboost
+scikit-learn
+shap
+joblib
+
+# Storage / infra
 supabase
 python-dotenv
+
+# Modal serverless inference
+modal
