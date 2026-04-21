@@ -137,17 +137,13 @@ def _run_backtest(
         )
 
         results.append({
-            "model_type":          model_type,
-            "split_index":         split_idx,
-            "train_max_season":    train_max,
-            "test_season":         test_season,
-            "auc_roc":             auc,
-            f"precision_at_{PRECISION_AT_K}": prec_k,
-            "calibration_error":   cal_err,
-            "comp_accuracy":       comp_acc,
-            "n_train":             len(train_df),
-            "n_test":              len(test_df),
-            "run_at":              run_at,
+            "model_type":      model_type,
+            "train_seasons":   f"2020-{train_max}",
+            "test_season":     test_season,
+            "auc_roc":         auc,
+            "precision_at_20": prec_k,
+            "calibration_err": cal_err,
+            "comp_accuracy":   comp_acc,
         })
 
     return results

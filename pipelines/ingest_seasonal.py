@@ -46,7 +46,13 @@ def main() -> None:
     df = build_seasonal_features(seasons, context_flags_path=context_flags)
     print(f"  {len(df)} rows built across {df['season'].nunique()} seasons")
 
-    rows = df_to_records(df)
+    # Cast smallint DB columns to Python int before upsert
+    # Note: draft_number, receiving_yards, rushing_yards are stored as smallint in DB
+    SMALLINT_COLS = [
+        "season", "games", "targets", "receptions", "receiving_tds", "carries",
+        "draft_number", "receiving_yards", "rushing_yards",
+    ]
+    rows = df_to_records(df, int_cols=SMALLINT_COLS)
 
     client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     total = _upsert_batched(client, rows)

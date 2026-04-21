@@ -33,7 +33,24 @@ def load_seasonal(seasons: list[int]) -> pd.DataFrame:
         rename["recent_team"] = "team"
     if "wopr_y" in df.columns:
         rename["wopr_y"] = "wopr"
-    return df.rename(columns=rename)
+    if "wopr_x" in df.columns and "wopr" not in rename.values() and "wopr" not in df.columns:
+        rename["wopr_x"] = "wopr"
+    df = df.rename(columns=rename)
+    # team column may be absent from newer nfl_data_py seasonal data — backfill from weekly
+    if "team" not in df.columns:
+        try:
+            weekly = nfl.import_weekly_data(seasons)
+            team_map = (
+                weekly[["player_id", "season", "recent_team", "week"]]
+                .sort_values("week")
+                .groupby(["player_id", "season"], as_index=False)
+                .last()[["player_id", "season", "recent_team"]]
+                .rename(columns={"recent_team": "team"})
+            )
+            df = df.merge(team_map, on=["player_id", "season"], how="left")
+        except Exception:
+            df["team"] = pd.NA
+    return df
 
 
 def load_snap_counts(seasons: list[int]) -> pd.DataFrame:
@@ -41,6 +58,15 @@ def load_snap_counts(seasons: list[int]) -> pd.DataFrame:
     df = _filter_positions(df)
     if "offense_pct" in df.columns and "snap_pct" not in df.columns:
         df = df.rename(columns={"offense_pct": "snap_pct"})
+    # snap counts use pfr_player_id; map to GSIS player_id so downstream joins work
+    if "player_id" not in df.columns and "pfr_player_id" in df.columns:
+        try:
+            id_map = nfl.import_ids()[["pfr_id", "gsis_id"]].dropna()
+            id_map = id_map.rename(columns={"pfr_id": "pfr_player_id", "gsis_id": "player_id"})
+            id_map = id_map.drop_duplicates("pfr_player_id")
+            df = df.merge(id_map, on="pfr_player_id", how="left")
+        except Exception:
+            df["player_id"] = pd.NA
     return df
 
 
@@ -56,12 +82,22 @@ def load_pbp(seasons: list[int]) -> pd.DataFrame:
 
 
 def load_roster_meta(seasons: list[int]) -> pd.DataFrame:
-    """Age and draft_number from weekly rosters (earliest week per player-season)."""
-    df = nfl.import_weekly_rosters(seasons)
-    df = _filter_positions(df)
-    df = df.sort_values("week").groupby(["player_id", "season"], as_index=False).first()
-    keep = [c for c in ["player_id", "season", "age", "draft_number"] if c in df.columns]
-    return df[keep].copy()
+    """Age and draft_number from weekly rosters (earliest week per player-season).
+
+    nfl_data_py + pandas 2.x can raise a ValueError due to duplicate index
+    labels inside import_weekly_rosters. We reset the index as a precaution
+    and fall back to an empty DataFrame so the pipeline continues — age and
+    draft_number will be null but all other features are unaffected.
+    """
+    try:
+        df = nfl.import_weekly_rosters(seasons)
+        df = df.reset_index(drop=True)
+        df = _filter_positions(df)
+        df = df.sort_values("week").groupby(["player_id", "season"], as_index=False).first()
+        keep = [c for c in ["player_id", "season", "age", "draft_number"] if c in df.columns]
+        return df[keep].copy()
+    except Exception:
+        return pd.DataFrame(columns=["player_id", "season", "age", "draft_number"])
 
 
 def load_weekly_stats(season: int) -> pd.DataFrame:

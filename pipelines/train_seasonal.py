@@ -101,9 +101,10 @@ def main() -> None:
     )
 
     preds = pred_df[["player_id", "season"]].copy().reset_index(drop=True)
-    preds["model_type"]    = "seasonal"
+    preds["prediction_type"] = "seasonal"
     preds["breakout_prob"] = proba
-    preds["risk_tier"]     = [score_to_tier(p) for p in proba]
+    preds["buy_sell_score"] = [int(round(float(p) * 100)) for p in proba]
+    preds["risk_tier"]     = None  # DB check constraint only allows null; tier derived from breakout_prob in frontend
     preds["shap_values"]   = shap_rows
     preds["comps"]         = comps_list
 

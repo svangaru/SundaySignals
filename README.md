@@ -96,10 +96,12 @@ SundaySignals/
 
 1. Create a project at [supabase.com](https://supabase.com)
 2. Open the **SQL Editor** and run `supabase/schema.sql` — creates all 4 tables, RLS policies, and indexes
-3. Go to **Storage → New bucket** → name it `models`, set to **private**
+3. Go to **Storage → New bucket** → name it `models`, type **Standard**, set to **private**
 4. Copy your **Project URL**, **service role key**, and **anon key** from Settings → API
 
 ### 2. Python environment
+
+Requires Python 3.11+. Using a virtual environment is recommended.
 
 ```bash
 pip install -r requirements.txt
@@ -107,19 +109,29 @@ cp .env.example .env
 # fill in SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY
 ```
 
+> **macOS SSL fix** — if you see `SSL: CERTIFICATE_VERIFY_FAILED`, run:
+> ```bash
+> /Applications/Python\ 3.12/Install\ Certificates.command
+> ```
+
+> **Python path** — always run pipeline scripts from the repo root with `PYTHONPATH=.`:
+> ```bash
+> PYTHONPATH=. python pipelines/ingest_seasonal.py
+> ```
+
 ### 3. Seed the database
 
 Run these in order on first setup:
 
 ```bash
-# Pull 2020–2024 historical data (~5 min, ~1GB PBP download on first run)
-python pipelines/ingest_seasonal.py
+# Pull 2020–2024 historical data (~5–10 min on first run)
+PYTHONPATH=. python pipelines/ingest_seasonal.py --seasons 2020 2021 2022 2023 2024
 
 # Train the pre-season model, compute SHAP + kNN comps, write predictions
-python pipelines/train_seasonal.py
+PYTHONPATH=. python pipelines/train_seasonal.py
 
 # Run walk-forward backtest, write model_performance rows
-python pipelines/backtest.py --model-type seasonal
+PYTHONPATH=. python pipelines/backtest.py --model-type seasonal
 ```
 
 After this the frontend will show real player predictions.
@@ -161,7 +173,7 @@ npm run dev   # http://localhost:3000
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` | Safe to expose — public project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key from Supabase | Safe to expose — read-only via RLS |
-| `MODAL_INFERENCE_URL` | printed by `modal deploy` | Server-side only, do not prefix with `NEXT_PUBLIC_` |
+| `MODAL_INFERENCE_URL` | printed by `modal deploy` | Server-side only, no `NEXT_PUBLIC_` prefix |
 
 ### 7. GitHub Actions secrets
 
@@ -181,8 +193,8 @@ Add in repo Settings → Secrets → Actions:
 Pulls 2020–present historical data via `nfl_data_py`. Computes all pre-season features and upserts to `player_seasons`. The August run captures OC/QB/roster changes before model training.
 
 ```bash
-python pipelines/ingest_seasonal.py
-python pipelines/ingest_seasonal.py --seasons 2022 2023 2024 --context-flags overrides/context_flags.csv
+PYTHONPATH=. python pipelines/ingest_seasonal.py
+PYTHONPATH=. python pipelines/ingest_seasonal.py --seasons 2022 2023 2024 --context-flags overrides/context_flags.csv
 ```
 
 ### Weekly ingest (runs every Tuesday, Sep–Jan)
@@ -190,8 +202,8 @@ python pipelines/ingest_seasonal.py --seasons 2022 2023 2024 --context-flags ove
 Pulls the previous week's game data, computes rolling features, upserts to `player_weeks`. Retrain workflow fires automatically on completion.
 
 ```bash
-python pipelines/ingest_weekly.py
-python pipelines/ingest_weekly.py --season 2024 --week 12
+PYTHONPATH=. python pipelines/ingest_weekly.py
+PYTHONPATH=. python pipelines/ingest_weekly.py --season 2024 --week 12
 ```
 
 ---
@@ -230,9 +242,9 @@ Walk-forward validation across three season splits:
 Metrics tracked per split: AUC-ROC, Precision@20, calibration error, comp accuracy.
 
 ```bash
-python pipelines/backtest.py --model-type seasonal
-python pipelines/backtest.py --model-type weekly
-python pipelines/backtest.py --model-type both
+PYTHONPATH=. python pipelines/backtest.py --model-type seasonal
+PYTHONPATH=. python pipelines/backtest.py --model-type weekly
+PYTHONPATH=. python pipelines/backtest.py --model-type both
 ```
 
 ---
@@ -275,6 +287,14 @@ pytest tests/ -v
 ```
 
 All tests mock `nfl_data_py` loaders — no network or database calls required.
+
+---
+
+## Compatibility notes
+
+- Requires **Python 3.11+** and **pandas 2.0+**
+- `nfl_data_py >= 0.3.1` required for pandas 2.x compatibility
+- Run all pipeline scripts from the repo root with `PYTHONPATH=.`
 
 ---
 

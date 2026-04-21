@@ -42,11 +42,18 @@ def three_point_slope(
     return slope
 
 
-def df_to_records(df: pd.DataFrame) -> list[dict]:
+def df_to_records(
+    df: pd.DataFrame,
+    int_cols: list[str] | None = None,
+) -> list[dict]:
     """
     Convert a DataFrame to a JSON-safe list of dicts for Supabase upserts.
     Handles NaN, pd.NA, numpy scalar types, and pandas nullable booleans.
+
+    int_cols: column names that must be sent as Python ints (for DB smallint/int
+    columns). float values that are whole numbers are cast; NaN becomes None.
     """
+    int_set = set(int_cols or [])
     records = []
     for row in df.to_dict(orient="records"):
         clean = {}
@@ -56,8 +63,10 @@ def df_to_records(df: pd.DataFrame) -> list[dict]:
             elif isinstance(v, bool):
                 clean[k] = bool(v)
             elif hasattr(v, "item"):
-                # numpy scalar → Python native
+                # numpy scalar → Python native (preserves int vs float)
                 clean[k] = v.item()
+            elif k in int_set and isinstance(v, float):
+                clean[k] = int(v) if not math.isnan(v) else None
             else:
                 clean[k] = v
         records.append(clean)
