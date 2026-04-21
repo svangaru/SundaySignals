@@ -1,6 +1,6 @@
 # Core data
 nfl-data-py
-pandas
+pandas>=2.0
 numpy
 
 # ML

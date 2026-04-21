@@ -14,9 +14,20 @@ import nfl_data_py as nfl
 from pipelines.constants import POSITIONS
 
 
+def _filter_positions(df: pd.DataFrame) -> pd.DataFrame:
+    """Filter to skill positions, normalising the position column name."""
+    for col in ("position", "player_position"):
+        if col in df.columns:
+            df = df[df[col].isin(POSITIONS)].copy()
+            if col != "position":
+                df = df.rename(columns={col: "position"})
+            return df
+    return df.copy()
+
+
 def load_seasonal(seasons: list[int]) -> pd.DataFrame:
     df = nfl.import_seasonal_data(seasons, s_type="REG")
-    df = df[df["position"].isin(POSITIONS)].copy()
+    df = _filter_positions(df)
     rename: dict[str, str] = {}
     if "recent_team" in df.columns:
         rename["recent_team"] = "team"
@@ -27,8 +38,7 @@ def load_seasonal(seasons: list[int]) -> pd.DataFrame:
 
 def load_snap_counts(seasons: list[int]) -> pd.DataFrame:
     df = nfl.import_snap_counts(seasons)
-    df = df[df["position"].isin(POSITIONS)].copy()
-    # nfl_data_py uses offense_pct; normalise to snap_pct
+    df = _filter_positions(df)
     if "offense_pct" in df.columns and "snap_pct" not in df.columns:
         df = df.rename(columns={"offense_pct": "snap_pct"})
     return df
@@ -48,7 +58,7 @@ def load_pbp(seasons: list[int]) -> pd.DataFrame:
 def load_roster_meta(seasons: list[int]) -> pd.DataFrame:
     """Age and draft_number from weekly rosters (earliest week per player-season)."""
     df = nfl.import_weekly_rosters(seasons)
-    df = df[df["position"].isin(POSITIONS)].copy()
+    df = _filter_positions(df)
     df = df.sort_values("week").groupby(["player_id", "season"], as_index=False).first()
     keep = [c for c in ["player_id", "season", "age", "draft_number"] if c in df.columns]
     return df[keep].copy()
@@ -56,7 +66,7 @@ def load_roster_meta(seasons: list[int]) -> pd.DataFrame:
 
 def load_weekly_stats(season: int) -> pd.DataFrame:
     df = nfl.import_weekly_data([season])
-    df = df[df["position"].isin(POSITIONS)].copy()
+    df = _filter_positions(df)
     rename: dict[str, str] = {}
     if "recent_team" in df.columns:
         rename["recent_team"] = "team"
