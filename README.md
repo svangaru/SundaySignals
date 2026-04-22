@@ -45,6 +45,7 @@ SundaySignals/
 │   ├── train_seasonal.py    # XGBoost seasonal model, SHAP, kNN comps
 │   ├── train_weekly.py      # XGBoost weekly model, updates predictions
 │   ├── backtest.py          # walk-forward validation, writes model_performance
+│   ├── backfill_names.py    # one-shot: populate player_name + position from weekly data
 │   └── modal_inference.py   # Modal app for live inference
 │
 ├── frontend/                # Next.js app (deployed on Vercel)
@@ -127,6 +128,9 @@ Run these in order on first setup:
 # Pull 2020–2024 historical data (~5–10 min on first run)
 PYTHONPATH=. python pipelines/ingest_seasonal.py --seasons 2020 2021 2022 2023 2024
 
+# Backfill player names and positions from weekly data (seasonal API omits both)
+PYTHONPATH=. python pipelines/backfill_names.py
+
 # Train the pre-season model, compute SHAP + kNN comps, write predictions
 PYTHONPATH=. python pipelines/train_seasonal.py
 
@@ -134,7 +138,8 @@ PYTHONPATH=. python pipelines/train_seasonal.py
 PYTHONPATH=. python pipelines/backtest.py --model-type seasonal
 ```
 
-After this the frontend will show real player predictions.
+> **Run backfill_names.py before train_seasonal.py** — training uses player names
+> when building historical comp records stored in the `predictions` table.
 
 ### 4. Modal inference (for live weight sliders)
 
@@ -152,6 +157,11 @@ modal deploy pipelines/modal_inference.py
 ```
 
 Add the printed URL as `MODAL_INFERENCE_URL` in Vercel environment variables.
+
+> **Modal 1.x notes**: `modal_inference.py` uses `image.add_local_python_source()`,
+> `@modal.fastapi_endpoint`, and `fastapi[standard]` — all required for Modal ≥ 1.0.
+> The weekly model is loaded lazily; if `weekly/latest.joblib` doesn't exist in Storage
+> (offseason), seasonal scoring still works fine.
 
 ### 5. Frontend (local dev)
 
@@ -197,6 +207,8 @@ PYTHONPATH=. python pipelines/ingest_seasonal.py
 PYTHONPATH=. python pipelines/ingest_seasonal.py --seasons 2022 2023 2024 --context-flags overrides/context_flags.csv
 ```
 
+`load_seasonal()` automatically backfills `player_name`, `position`, and `team` from `import_weekly_data()` in the same pass — no separate step needed after initial seed.
+
 ### Weekly ingest (runs every Tuesday, Sep–Jan)
 
 Pulls the previous week's game data, computes rolling features, upserts to `player_weeks`. Retrain workflow fires automatically on completion.
@@ -225,7 +237,7 @@ PYTHONPATH=. python pipelines/ingest_weekly.py --season 2024 --week 12
 
 ### Comp finder
 
-kNN with cosine similarity on normalized feature vectors. Top-5 most similar player-seasons from 2000–present. Computed at prediction time and stored in Supabase — frontend reads rows directly.
+kNN with cosine similarity on normalized feature vectors. Top-5 most similar player-seasons from historical data. Computed at prediction time and stored in Supabase — frontend reads rows directly.
 
 ---
 
@@ -266,6 +278,12 @@ When a user adjusts feature weights in the UI, `pages/api/score.ts` (Vercel) pro
 
 RLS is enabled on all tables. The frontend uses the anon key (read-only). Pipelines use the service role key.
 
+> **Schema note**: `supabase/schema.sql` reflects the actual live DB schema. Key differences
+> from a naive schema: `predictions` uses `prediction_type` (not `model_type`); `risk_tier`
+> and `direction` have broken check constraints and are always written as NULL (tier is derived
+> from `breakout_prob` in the frontend); `model_performance` uses `train_seasons` (text),
+> `calibration_err`, and `run_at`.
+
 ---
 
 ## GitHub Actions
@@ -293,52 +311,33 @@ All tests mock `nfl_data_py` loaders — no network or database calls required.
 ## Compatibility notes
 
 - Requires **Python 3.11+** and **pandas 2.0+**
-- `nfl_data_py >= 0.3.1` required for pandas 2.x compatibility
+- `nfl_data_py 0.3.2` — latest version compatible with Python 3.12 + pandas 2.x
 - Run all pipeline scripts from the repo root with `PYTHONPATH=.`
 - **macOS**: `brew install libomp` required for XGBoost to load
+- **Modal 1.x**: `modal.Mount` and `@modal.web_endpoint` are removed — use
+  `image.add_local_python_source()` and `@modal.fastapi_endpoint` instead
 
 ---
 
 ## Current status (April 2026)
 
-### Done
-| Step | Command | Result |
-|---|---|---|
-| Seasonal ingest | `ingest_seasonal.py --seasons 2020–2024` | 3,103 rows in `player_seasons` |
-| Seasonal training | `train_seasonal.py` | 101 predictions for 2024, model in Storage |
-| Backtest | `backtest.py --model-type seasonal` | 3 rows in `model_performance` (AUC 0.67–0.87) |
+### Live in production
 
-### Still to do
+| Step | Result |
+|---|---|
+| Seasonal ingest (2020–2024) | 3,103 rows in `player_seasons` |
+| Player name + position backfill | 3,068 / 3,103 rows populated |
+| Seasonal training | 607 predictions for 2024 season in `predictions` |
+| Backtest | 3 rows in `model_performance` (AUC 0.67–0.87) |
+| Modal inference | Deployed — `sunday-signals-inference` app on svangaru workspace |
+| Frontend | Live on Vercel — player explorer, detail pages, accuracy page all working |
 
-**1. Fix the frontend (player explorer shows blank)**
-Two bugs in `frontend/pages/index.tsx`:
-- Queries `.eq('model_type', ...)` but the DB column is `prediction_type`
-- Filters on `risk_tier` which is always null in DB; must derive tier from `breakout_prob`
-  (≥0.65 → high, ≥0.40 → medium, else low)
+### Pending (start of 2025 NFL season)
 
-Also: `player_name` is null for all `player_seasons` rows — names need to be backfilled
-from `import_weekly_data()` during ingest and re-run.
-
-**2. Deploy Modal inference (for weight sliders on player detail page)**
-```bash
-modal setup
-modal secret create supabase-secrets SUPABASE_URL=<url> SUPABASE_SERVICE_KEY=<key>
-modal deploy pipelines/modal_inference.py
-# add printed URL as MODAL_INFERENCE_URL in Vercel Settings → Environment Variables
-```
-
-**3. Weekly pipeline** — runs automatically via GitHub Actions (Tuesdays Sep–Jan).
-No action needed until NFL season starts.
-
-### Known DB schema differences
-The Supabase DB was created from an earlier schema than `supabase/schema.sql`.
-Key differences that have been accounted for in pipeline code:
-- `predictions` table uses `prediction_type` column (not `model_type`)
-- `risk_tier` and `direction` columns have check constraints that block all non-null values
-- `model_performance` uses `train_seasons` (text), `calibration_err`, `run_at`
-- `player_seasons` has `draft_number`, `receiving_yards`, `rushing_yards` as `smallint`
-
-See `CLAUDE.md` → "Actual Supabase DB Schema" for full details.
+- **Weekly pipeline** — `ingest_weekly.py` + `train_weekly.py` run automatically via
+  GitHub Actions every Tuesday Sep–Jan. No action needed until the season starts.
+- **Seasonal re-ingest** — run `ingest_seasonal.py` each March (final stats) and
+  August (roster/OC/QB updates) then `train_seasonal.py` to refresh predictions.
 
 ---
 

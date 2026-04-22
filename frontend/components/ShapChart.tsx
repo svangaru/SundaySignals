@@ -32,7 +32,7 @@ export default function ShapChart({ shap }: Props) {
       <BarChart
         layout="vertical"
         data={entries}
-        margin={{ top: 4, right: 16, left: 120, bottom: 4 }}
+        margin={{ top: 4, right: 16, left: 210, bottom: 4 }}
       >
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
         <XAxis
@@ -45,7 +45,7 @@ export default function ShapChart({ shap }: Props) {
           type="category"
           dataKey="label"
           tick={{ fontSize: 12 }}
-          width={116}
+          width={206}
         />
         <Tooltip
           formatter={(value: number) => [value.toFixed(3), 'SHAP value']}
