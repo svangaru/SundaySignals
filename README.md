@@ -341,6 +341,28 @@ All tests mock `nfl_data_py` loaders — no network or database calls required.
 
 ---
 
+## Future improvements
+
+### Position-specific models
+
+The current model trains a single XGBoost classifier across all skill positions (RB, WR, TE). This is a known limitation — the same feature value means very different things depending on position:
+
+- A 20% target share is elite for a TE but average for a WR
+- Snap share volatility matters far more for RBs (who rotate in backfields) than WRs
+- Age curves differ by position: RBs typically peak at 24–26, TEs at 26–28
+
+**Planned change**: train one model per position (`RB`, `WR`, `TE`), save separate artifacts to Supabase Storage (`seasonal/RB/latest.joblib`, etc.), and route Modal inference to the correct model based on the player's position. The backtest would then report AUC per position, making it easier to see where the model is weakest.
+
+### Extend training data pre-2020
+
+Only 5 seasons (2020–2024) are currently used for training. Adding 2015–2019 would roughly triple the labeled examples and reduce the variance in walk-forward AUC scores seen across splits (0.67–0.87 is too wide a range to trust).
+
+### Weekly model activation
+
+The in-season pipeline (`ingest_weekly.py` + `train_weekly.py`) is wired and scheduled via GitHub Actions but has not yet run — there is no 2025 season data yet. It will activate automatically each Tuesday starting Week 1 of the 2025 NFL season.
+
+---
+
 ## License
 
 MIT
