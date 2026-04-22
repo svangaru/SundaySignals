@@ -42,13 +42,35 @@ def three_point_slope(
     return slope
 
 
+def _clean_value(v: object, int_col: bool = False) -> object:
+    """Recursively convert a value to a JSON-safe Python native type."""
+    if v is pd.NA or v is None:
+        return None
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    if isinstance(v, bool):
+        return bool(v)
+    if hasattr(v, "item"):
+        # numpy scalar → Python native (int or float)
+        native = v.item()
+        return None if (isinstance(native, float) and math.isnan(native)) else native
+    if int_col and isinstance(v, float):
+        return int(v)
+    if isinstance(v, dict):
+        return {dk: _clean_value(dv) for dk, dv in v.items()}
+    if isinstance(v, list):
+        return [_clean_value(item) for item in v]
+    return v
+
+
 def df_to_records(
     df: pd.DataFrame,
     int_cols: list[str] | None = None,
 ) -> list[dict]:
     """
     Convert a DataFrame to a JSON-safe list of dicts for Supabase upserts.
-    Handles NaN, pd.NA, numpy scalar types, and pandas nullable booleans.
+    Handles NaN, pd.NA, numpy scalars, booleans, and nested dicts/lists
+    (e.g. shap_values and comps JSONB columns).
 
     int_cols: column names that must be sent as Python ints (for DB smallint/int
     columns). float values that are whole numbers are cast; NaN becomes None.
@@ -56,18 +78,5 @@ def df_to_records(
     int_set = set(int_cols or [])
     records = []
     for row in df.to_dict(orient="records"):
-        clean = {}
-        for k, v in row.items():
-            if v is pd.NA or (isinstance(v, float) and math.isnan(v)):
-                clean[k] = None
-            elif isinstance(v, bool):
-                clean[k] = bool(v)
-            elif hasattr(v, "item"):
-                # numpy scalar → Python native (preserves int vs float)
-                clean[k] = v.item()
-            elif k in int_set and isinstance(v, float):
-                clean[k] = int(v) if not math.isnan(v) else None
-            else:
-                clean[k] = v
-        records.append(clean)
+        records.append({k: _clean_value(v, int_col=k in int_set) for k, v in row.items()})
     return records

@@ -36,20 +36,55 @@ def load_seasonal(seasons: list[int]) -> pd.DataFrame:
     if "wopr_x" in df.columns and "wopr" not in rename.values() and "wopr" not in df.columns:
         rename["wopr_x"] = "wopr"
     df = df.rename(columns=rename)
-    # team column may be absent from newer nfl_data_py seasonal data — backfill from weekly
-    if "team" not in df.columns:
+
+    # import_seasonal_data() does not return player_name, position, or recent_team
+    # reliably. Backfill all three from weekly data in one pass.
+    needs_team     = "team" not in df.columns
+    needs_name     = "player_name" not in df.columns
+    needs_position = "position" not in df.columns
+    if needs_team or needs_name or needs_position:
         try:
             weekly = nfl.import_weekly_data(seasons)
-            team_map = (
-                weekly[["player_id", "season", "recent_team", "week"]]
+            name_col = next(
+                (c for c in ("player_display_name", "player_name") if c in weekly.columns),
+                None,
+            )
+            pos_col = next(
+                (c for c in ("position", "player_position") if c in weekly.columns),
+                None,
+            )
+            keep = ["player_id", "season", "week"]
+            if needs_team and "recent_team" in weekly.columns:
+                keep.append("recent_team")
+            if needs_name and name_col:
+                keep.append(name_col)
+            if needs_position and pos_col:
+                keep.append(pos_col)
+            meta = (
+                weekly[keep]
                 .sort_values("week")
                 .groupby(["player_id", "season"], as_index=False)
-                .last()[["player_id", "season", "recent_team"]]
-                .rename(columns={"recent_team": "team"})
+                .last()
             )
-            df = df.merge(team_map, on=["player_id", "season"], how="left")
+            if needs_team and "recent_team" in meta.columns:
+                meta = meta.rename(columns={"recent_team": "team"})
+            if needs_name and name_col and name_col != "player_name":
+                meta = meta.rename(columns={name_col: "player_name"})
+            if needs_position and pos_col and pos_col != "position":
+                meta = meta.rename(columns={pos_col: "position"})
+            merge_cols = [c for c in ("team", "player_name", "position") if c in meta.columns]
+            df = df.merge(
+                meta[["player_id", "season"] + merge_cols],
+                on=["player_id", "season"],
+                how="left",
+            )
         except Exception:
-            df["team"] = pd.NA
+            if needs_team:
+                df["team"] = pd.NA
+            if needs_name:
+                df["player_name"] = pd.NA
+            if needs_position:
+                df["position"] = pd.NA
     return df
 
 

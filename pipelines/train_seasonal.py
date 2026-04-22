@@ -118,13 +118,24 @@ def main() -> None:
 # ---------------------------------------------------------------------------
 
 def _load_player_seasons(client: Client, seasons: list[int]) -> pd.DataFrame:
-    response = (
-        client.table(SOURCE_TABLE)
-        .select("*")
-        .in_("season", seasons)
-        .execute()
-    )
-    return pd.DataFrame(response.data)
+    # Supabase Python client defaults to 1000 rows per query — paginate to get all.
+    rows: list[dict] = []
+    page_size = 1000
+    offset = 0
+    while True:
+        page = (
+            client.table(SOURCE_TABLE)
+            .select("*")
+            .in_("season", seasons)
+            .range(offset, offset + page_size - 1)
+            .execute()
+            .data
+        )
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return pd.DataFrame(rows)
 
 
 def _add_derived_features(df: pd.DataFrame) -> pd.DataFrame:

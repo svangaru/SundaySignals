@@ -93,7 +93,10 @@ export default function PlayerDetailPage({ playerId, seasons, prediction, weeks 
   }, [player, baseFeatures])
 
   const displayProb = liveScore?.breakout_prob ?? prediction?.breakout_prob
-  const displayTier = liveScore?.risk_tier     ?? prediction?.risk_tier ?? 'low'
+  // risk_tier is always NULL in DB — derive from breakout_prob; liveScore from Modal has it correctly
+  const deriveTier  = (prob: number | null | undefined) =>
+    prob == null ? 'low' : prob >= 0.65 ? 'high' : prob >= 0.40 ? 'medium' : 'low'
+  const displayTier = liveScore?.risk_tier ?? deriveTier(displayProb)
   const displayShap = liveScore?.shap_values   ?? prediction?.shap_values
   const tierStyle   = TIER_COLORS[displayTier] ?? TIER_COLORS.low
 

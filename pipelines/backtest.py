@@ -212,13 +212,31 @@ def _comp_accuracy(
 # ---------------------------------------------------------------------------
 
 def _load_seasonal(client: Client) -> pd.DataFrame:
-    response = client.table(SEASONS_TABLE).select("*").execute()
-    return pd.DataFrame(response.data)
+    return _paginated_select(client, SEASONS_TABLE)
 
 
 def _load_weekly(client: Client) -> pd.DataFrame:
-    response = client.table(WEEKS_TABLE).select("*").execute()
-    return pd.DataFrame(response.data)
+    return _paginated_select(client, WEEKS_TABLE)
+
+
+def _paginated_select(client: Client, table: str) -> pd.DataFrame:
+    """Select all rows from a table, paginating past the 1000-row default limit."""
+    rows: list[dict] = []
+    page_size = 1000
+    offset = 0
+    while True:
+        page = (
+            client.table(table)
+            .select("*")
+            .range(offset, offset + page_size - 1)
+            .execute()
+            .data
+        )
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return pd.DataFrame(rows)
 
 
 def _prepare_seasonal(df: pd.DataFrame) -> pd.DataFrame:
