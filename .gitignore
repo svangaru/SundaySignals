@@ -1,8 +1,6 @@
 .venv
 .python-version
-CLAUDE.md
 .env
-.claude
 
 # Python bytecode
 __pycache__/
